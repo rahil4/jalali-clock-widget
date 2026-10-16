@@ -31,16 +31,13 @@
                 android:fontFamily="sans-serif-thin"
                 android:format12Hour="HH"
                 android:format24Hour="HH"
-                android:includeFontPadding="false"
-                android:letterSpacing="-0.03"
                 android:textSize="64dp" />
 
-            <View
-                android:id="@+id/divider"
+            <ImageView
+                android:id="@+id/spacer"
                 android:layout_width="26dp"
-                android:layout_height="1.5dp"
-                android:layout_marginTop="8dp"
-                android:layout_marginBottom="8dp" />
+                android:layout_height="17dp"
+                android:contentDescription="@null" />
 
             <TextClock
                 android:id="@+id/minute"
@@ -49,8 +46,6 @@
                 android:fontFamily="sans-serif-thin"
                 android:format12Hour="mm"
                 android:format24Hour="mm"
-                android:includeFontPadding="false"
-                android:letterSpacing="-0.03"
                 android:textSize="64dp" />
         </LinearLayout>
     </FrameLayout>

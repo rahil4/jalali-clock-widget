@@ -43,7 +43,6 @@ public final class WidgetRenderer {
         rv.setTextViewTextSize(R.id.minute, TypedValue.COMPLEX_UNIT_DIP, digits);
         rv.setTextColor(R.id.hour, color);
         rv.setTextColor(R.id.minute, alpha(color, 0.62f));
-        rv.setInt(R.id.divider, "setBackgroundColor", alpha(color, 0.5f));
 
         boolean withWeekday = frameW >= 120f;
         rv.setTextViewText(R.id.date, JalaliDate.format(LocalDate.now(), withWeekday));
@@ -61,7 +60,7 @@ public final class WidgetRenderer {
     }
 
     /** سقف تعداد پیکسل بیت‌مپ؛ بیت‌مپ‌های بزرگ از حد ۱ مگابایتی Binder می‌گذرند و ویجت اصلاً نمایش داده نمی‌شود. */
-    private static final int MAX_PIXELS = 120_000;
+    private static final int MAX_PIXELS = 60_000;
 
     private static Bitmap frameBitmap(float wDp, float hDp, int radiusDp, int color, float density) {
         float fullW = wDp * density;
@@ -82,6 +81,15 @@ public final class WidgetRenderer {
         RectF rect = new RectF(half, half, w - half, h - half);
         float r = Math.min(radiusDp * d, Math.min(rect.width(), rect.height()) / 2f);
         canvas.drawRoundRect(rect, r, r, p);
+
+        // خط کوتاه بین ساعت و دقیقه (وسط قاب)
+        Paint line = new Paint(Paint.ANTI_ALIAS_FLAG);
+        line.setStyle(Paint.Style.STROKE);
+        line.setStrokeWidth(STROKE_DP * d);
+        line.setColor(alpha(color, 0.5f));
+        float cy = h / 2f;
+        float half2 = 13f * d;
+        canvas.drawLine(w / 2f - half2, cy, w / 2f + half2, cy, line);
         return bmp;
     }
 }
