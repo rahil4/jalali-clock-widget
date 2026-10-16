@@ -6,6 +6,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
+import android.widget.RemoteViews;
 
 public class ClockWidgetProvider extends AppWidgetProvider {
 
@@ -16,8 +17,16 @@ public class ClockWidgetProvider extends AppWidgetProvider {
         int h = o.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 200);
         if (w <= 0) w = 110;
         if (h <= 0) h = 200;
-        mgr.updateAppWidget(id, WidgetRenderer.build(ctx, id,
-                WidgetPrefs.color(ctx, id), WidgetPrefs.radiusDp(ctx, id), w, h));
+        RemoteViews rv;
+        try {
+            rv = WidgetRenderer.build(ctx, id,
+                    WidgetPrefs.color(ctx, id), WidgetPrefs.radiusDp(ctx, id), w, h);
+        } catch (Throwable t) {
+            // به‌جای ناپدید شدن بی‌صدا، علت خطا روی ویجت نوشته می‌شود
+            rv = new RemoteViews(ctx.getPackageName(), R.layout.widget_error);
+            rv.setTextViewText(R.id.error, String.valueOf(t));
+        }
+        mgr.updateAppWidget(id, rv);
     }
 
     @Override

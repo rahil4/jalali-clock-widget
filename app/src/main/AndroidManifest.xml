@@ -23,11 +23,7 @@
 
         <activity
             android:name=".SettingsActivity"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
-            </intent-filter>
-        </activity>
+            android:exported="false" />
 
         <activity
             android:name=".LauncherActivity"
