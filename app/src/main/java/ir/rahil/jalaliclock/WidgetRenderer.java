@@ -10,6 +10,7 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.RectF;
 import android.util.TypedValue;
+import android.os.Build;
 import android.widget.RemoteViews;
 
 import java.time.LocalDate;
@@ -25,8 +26,8 @@ public final class WidgetRenderer {
         return Color.argb(Math.round(255 * a), Color.red(color), Color.green(color), Color.blue(color));
     }
 
-    public static RemoteViews build(Context ctx, int widgetId, int color, int radiusDp, int widthDp, int heightDp) {
-        float density = ctx.getResources().getDisplayMetrics().density;
+    public static RemoteViews build(Context ctx, int widgetId, WidgetPrefs.Config cfg, int widthDp, int heightDp) {
+        int color = cfg.color;
 
         // فضای قاب = کل ویجت منهای حاشیه و ردیف تاریخ
         float availW = widthDp - 12;
@@ -36,9 +37,14 @@ public final class WidgetRenderer {
 
         RemoteViews rv = new RemoteViews(ctx.getPackageName(), R.layout.widget_clock);
 
-        rv.setImageViewBitmap(R.id.frame, frameBitmap(frameW, frameH, radiusDp, color, density));
+        // اندازهٔ قاب صریح تعیین می‌شود تا تصویر یکنواخت مقیاس شود و گوشه‌ها گرد بمانند
+        if (Build.VERSION.SDK_INT >= 31) {
+            rv.setViewLayoutWidth(R.id.frame, frameW, TypedValue.COMPLEX_UNIT_DIP);
+            rv.setViewLayoutHeight(R.id.frame, frameH, TypedValue.COMPLEX_UNIT_DIP);
+        }
+        rv.setImageViewBitmap(R.id.frame, frameBitmap(frameW, frameH, cfg, ctx.getResources().getDisplayMetrics().density));
 
-        float digits = frameH * 0.33f;
+        float digits = frameH * 0.30f;
         rv.setTextViewTextSize(R.id.hour, TypedValue.COMPLEX_UNIT_DIP, digits);
         rv.setTextViewTextSize(R.id.minute, TypedValue.COMPLEX_UNIT_DIP, digits);
         rv.setTextColor(R.id.hour, color);
@@ -59,37 +65,44 @@ public final class WidgetRenderer {
         return rv;
     }
 
-    /** سقف تعداد پیکسل بیت‌مپ؛ بیت‌مپ‌های بزرگ از حد ۱ مگابایتی Binder می‌گذرند و ویجت اصلاً نمایش داده نمی‌شود. */
+    /** سقف تعداد پیکسل بیت‌مپ؛ بیت‌مپ‌های بزرگ از حد ۱ مگابایتی Binder می‌گذرند. */
     private static final int MAX_PIXELS = 60_000;
 
-    private static Bitmap frameBitmap(float wDp, float hDp, int radiusDp, int color, float density) {
-        float fullW = wDp * density;
-        float fullH = hDp * density;
-        // اگر قاب بزرگ بود، با وضوح کمتر رسم می‌شود و با density پایین‌تر در همان اندازهٔ dp نمایش داده می‌شود
-        float scale = Math.min(1f, (float) Math.sqrt(MAX_PIXELS / (fullW * fullH)));
-        float d = density * scale;
-        int w = Math.max(1, Math.round(wDp * d));
-        int h = Math.max(1, Math.round(hDp * d));
+    private static Bitmap frameBitmap(float wDp, float hDp, WidgetPrefs.Config cfg, float density) {
+        // نسبت عرض به ارتفاع دقیقاً همان قاب است؛ وضوح بیت‌مپ فقط برای حجم کمتر کم می‌شود
+        float px = Math.min(density, (float) Math.sqrt(MAX_PIXELS / (wDp * hDp)));
+        int w = Math.max(1, Math.round(wDp * px));
+        int h = Math.max(1, Math.round(hDp * px));
         Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
-        bmp.setDensity(Math.max(1, Math.round(160 * d)));
+        bmp.setDensity(Math.max(1, Math.round(160 * px))); // برای نمایش در اندازهٔ dp درست روی اندروید قدیمی‌تر
         Canvas canvas = new Canvas(bmp);
+
+        float stroke = STROKE_DP * px;
+        float half = stroke / 2f;
+        RectF rect = new RectF(half, half, w - half, h - half);
+        float r = Math.min(cfg.radiusDp * px, Math.min(rect.width(), rect.height()) / 2f);
+
+        if (cfg.fillOpacity > 0) {
+            Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
+            fill.setStyle(Paint.Style.FILL);
+            fill.setColor(alpha(cfg.fillColor, cfg.fillOpacity / 100f));
+            canvas.drawRoundRect(rect, r, r, fill);
+        }
+
         Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
         p.setStyle(Paint.Style.STROKE);
-        p.setStrokeWidth(STROKE_DP * d);
-        p.setColor(color);
-        float half = p.getStrokeWidth() / 2f;
-        RectF rect = new RectF(half, half, w - half, h - half);
-        float r = Math.min(radiusDp * d, Math.min(rect.width(), rect.height()) / 2f);
+        p.setStrokeWidth(stroke);
+        p.setColor(cfg.color);
         canvas.drawRoundRect(rect, r, r, p);
 
         // خط کوتاه بین ساعت و دقیقه (وسط قاب)
         Paint line = new Paint(Paint.ANTI_ALIAS_FLAG);
         line.setStyle(Paint.Style.STROKE);
-        line.setStrokeWidth(STROKE_DP * d);
-        line.setColor(alpha(color, 0.5f));
+        line.setStrokeWidth(stroke);
+        line.setColor(alpha(cfg.color, 0.5f));
         float cy = h / 2f;
-        float half2 = 13f * d;
-        canvas.drawLine(w / 2f - half2, cy, w / 2f + half2, cy, line);
+        float arm = 13f * px;
+        canvas.drawLine(w / 2f - arm, cy, w / 2f + arm, cy, line);
         return bmp;
     }
 }

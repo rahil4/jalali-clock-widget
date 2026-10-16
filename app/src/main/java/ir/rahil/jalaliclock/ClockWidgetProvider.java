@@ -19,8 +19,7 @@ public class ClockWidgetProvider extends AppWidgetProvider {
         if (h <= 0) h = 200;
         RemoteViews rv;
         try {
-            rv = WidgetRenderer.build(ctx, id,
-                    WidgetPrefs.color(ctx, id), WidgetPrefs.radiusDp(ctx, id), w, h);
+            rv = WidgetRenderer.build(ctx, id, WidgetPrefs.load(ctx, id), w, h);
         } catch (Throwable t) {
             // به‌جای ناپدید شدن بی‌صدا، علت خطا روی ویجت نوشته می‌شود
             rv = new RemoteViews(ctx.getPackageName(), R.layout.widget_error);

@@ -16,7 +16,7 @@ import android.widget.ScrollView;
 import android.widget.SeekBar;
 import android.widget.TextView;
 
-/** تنظیمات ویجت: رنگ و گردی گوشه‌های قاب، با پیش‌نمایش زنده. */
+/** تنظیمات ویجت: رنگ، گردی گوشه‌ها، رنگ و شفافیت داخل قاب؛ با پیش‌نمایش زنده. */
 public class SettingsActivity extends Activity {
     private static final int PREVIEW_W_DP = 150;
     private static final int PREVIEW_H_DP = 270;
@@ -24,20 +24,24 @@ public class SettingsActivity extends Activity {
             Color.WHITE, Color.BLACK, 0xFFF4B23E, 0xFF5EEAD4, 0xFFE5583A, 0xFF7DB7FF, 0xFFFF8FB1};
 
     private int widgetId = AppWidgetManager.INVALID_APPWIDGET_ID;
-    private int color;
-    private int radiusDp;
+    private WidgetPrefs.Config cfg;
     private boolean lightBackdrop;
 
     private FrameLayout preview;
-    private SeekBar hueBar;
-    private SeekBar valueBar;
     private TextView radiusLabel;
-    private boolean syncing;
-
+    private TextView opacityLabel;
     private float density;
 
     private int dp(float v) {
         return Math.round(v * density);
+    }
+
+    private interface OnProgress {
+        void on(int progress);
+    }
+
+    private interface OnColor {
+        void on(int color);
     }
 
     @Override
@@ -55,10 +59,7 @@ public class SettingsActivity extends Activity {
             finish();
             return;
         }
-        setResult(RESULT_CANCELED, new Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId));
-
-        color = WidgetPrefs.color(this, widgetId);
-        radiusDp = WidgetPrefs.radiusDp(this, widgetId);
+        cfg = WidgetPrefs.load(this, widgetId);
 
         ScrollView scroll = new ScrollView(this);
         scroll.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
@@ -67,7 +68,7 @@ public class SettingsActivity extends Activity {
         col.setPadding(dp(20), dp(24), dp(20), dp(24));
         scroll.addView(col);
 
-        col.addView(title("تنظیمات ویجت"));
+        col.addView(text("تنظیمات ویجت", 22, 0, 12));
 
         preview = new FrameLayout(this);
         col.addView(preview, new LinearLayout.LayoutParams(
@@ -81,43 +82,30 @@ public class SettingsActivity extends Activity {
         });
         col.addView(backdrop);
 
-        col.addView(section("رنگ"));
-        LinearLayout swatchRow = new LinearLayout(this);
-        swatchRow.setGravity(Gravity.CENTER);
-        for (int c : SWATCHES) {
-            View s = new View(this);
-            GradientDrawable d = new GradientDrawable();
-            d.setShape(GradientDrawable.OVAL);
-            d.setColor(c);
-            d.setStroke(dp(1.5f), 0x66808080);
-            s.setBackground(d);
-            s.setOnClickListener(v -> {
-                color = c;
-                syncSliders();
-                refreshPreview();
-            });
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(36), dp(36));
-            lp.setMargins(dp(5), 0, dp(5), 0);
-            swatchRow.addView(s, lp);
-        }
-        col.addView(swatchRow);
+        addColorSection(col, "رنگ نوشته و خط قاب", cfg.color, c -> cfg.color = c);
 
-        col.addView(label("رنگ دلخواه (طیف)"));
-        hueBar = seek(360, p -> setCustomColor());
-        col.addView(hueBar);
-        col.addView(label("روشنایی"));
-        valueBar = seek(100, p -> setCustomColor());
-        col.addView(valueBar);
-
-        col.addView(section("گردی گوشه‌ها"));
-        radiusLabel = label("");
+        col.addView(text("گردی گوشه‌ها", 17, 0, 8, 20));
+        radiusLabel = text("", 13, 0, 0, 8);
         col.addView(radiusLabel);
         SeekBar radiusBar = seek(WidgetPrefs.MAX_RADIUS_DP, p -> {
-            radiusDp = p;
+            cfg.radiusDp = p;
             refreshPreview();
         });
-        radiusBar.setProgress(radiusDp);
+        radiusBar.setProgress(cfg.radiusDp);
         col.addView(radiusBar);
+
+        addColorSection(col, "رنگ داخل قاب", cfg.fillColor, c -> cfg.fillColor = c);
+
+        col.addView(text("شفافیت داخل قاب", 17, 0, 8, 20));
+        opacityLabel = text("", 13, 0, 0, 8);
+        col.addView(opacityLabel);
+        SeekBar opacityBar = seek(100, p -> {
+            cfg.fillOpacity = p;
+            refreshPreview();
+        });
+        opacityBar.setProgress(cfg.fillOpacity);
+        col.addView(opacityBar);
+        col.addView(text("۰٪ یعنی داخل قاب کاملاً شفاف و ۱۰۰٪ یعنی کاملاً رنگی.", 12, 0, 0, 4));
 
         Button save = new Button(this);
         save.setText("ذخیره");
@@ -128,12 +116,57 @@ public class SettingsActivity extends Activity {
         col.addView(save, saveLp);
 
         setContentView(scroll);
-        syncSliders();
         refreshPreview();
     }
 
-    private interface OnProgress {
-        void on(int progress);
+    /** بخش انتخاب رنگ: رنگ‌های آماده + طیف + روشنایی */
+    private void addColorSection(LinearLayout col, String title, int initial, OnColor onColor) {
+        col.addView(text(title, 17, 0, 8, 20));
+
+        SeekBar[] bars = new SeekBar[2]; // [طیف، روشنایی]
+        LinearLayout swatchRow = new LinearLayout(this);
+        swatchRow.setGravity(Gravity.CENTER);
+        col.addView(swatchRow);
+
+        col.addView(text("طیف رنگ", 13, 0, 0, 8));
+        bars[0] = seek(360, p -> {
+            onColor.on(Color.HSVToColor(new float[]{bars[0].getProgress(), 0.65f,
+                    Math.max(0.2f, bars[1].getProgress() / 100f)}));
+            refreshPreview();
+        });
+        col.addView(bars[0]);
+        col.addView(text("روشنایی", 13, 0, 0, 8));
+        bars[1] = seek(100, p -> {
+            onColor.on(Color.HSVToColor(new float[]{bars[0].getProgress(), 0.65f,
+                    Math.max(0.2f, p / 100f)}));
+            refreshPreview();
+        });
+        col.addView(bars[1]);
+
+        float[] hsv = new float[3];
+        Color.colorToHSV(initial, hsv);
+        bars[0].setProgress(Math.round(hsv[0]));
+        bars[1].setProgress(Math.round(hsv[2] * 100));
+
+        for (int c : SWATCHES) {
+            View s = new View(this);
+            GradientDrawable d = new GradientDrawable();
+            d.setShape(GradientDrawable.OVAL);
+            d.setColor(c);
+            d.setStroke(dp(1.5f), 0x66808080);
+            s.setBackground(d);
+            s.setOnClickListener(v -> {
+                onColor.on(c);
+                float[] h = new float[3];
+                Color.colorToHSV(c, h);
+                bars[0].setProgress(Math.round(h[0]));
+                bars[1].setProgress(Math.round(h[2] * 100));
+                refreshPreview();
+            });
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(36), dp(36));
+            lp.setMargins(dp(5), 0, dp(5), 0);
+            swatchRow.addView(s, lp);
+        }
     }
 
     private SeekBar seek(int max, OnProgress cb) {
@@ -154,64 +187,35 @@ public class SettingsActivity extends Activity {
         return s;
     }
 
-    private void setCustomColor() {
-        float hue = hueBar.getProgress();
-        float value = Math.max(0.2f, valueBar.getProgress() / 100f);
-        color = Color.HSVToColor(new float[]{hue, 0.65f, value});
-        refreshPreview();
-    }
-
-    /** لغزنده‌ها را با رنگ فعلی هماهنگ می‌کند. */
-    private void syncSliders() {
-        float[] hsv = new float[3];
-        Color.colorToHSV(color, hsv);
-        hueBar.setProgress(Math.round(hsv[0]));
-        valueBar.setProgress(Math.round(hsv[2] * 100));
-    }
-
     private void refreshPreview() {
-        radiusLabel.setText(JalaliDate.toPersianDigits(radiusDp + " dp"));
+        radiusLabel.setText(JalaliDate.toPersianDigits(cfg.radiusDp + " dp"));
+        opacityLabel.setText(JalaliDate.toPersianDigits(cfg.fillOpacity + "٪"));
         GradientDrawable bg = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
                 lightBackdrop ? new int[]{0xFF9ED3D0, 0xFFF4E9D2} : new int[]{0xFF2A1F4D, 0xFFFF9A6B});
         bg.setCornerRadius(dp(20));
         preview.setBackground(bg);
         preview.removeAllViews();
-        View w = WidgetRenderer.build(this, widgetId, color, radiusDp, PREVIEW_W_DP, PREVIEW_H_DP)
-                .apply(this, preview);
-        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(dp(PREVIEW_W_DP), dp(PREVIEW_H_DP),
-                Gravity.CENTER);
-        preview.addView(w, lp);
+        View w = WidgetRenderer.build(this, widgetId, cfg, PREVIEW_W_DP, PREVIEW_H_DP).apply(this, preview);
+        preview.addView(w, new FrameLayout.LayoutParams(dp(PREVIEW_W_DP), dp(PREVIEW_H_DP), Gravity.CENTER));
     }
 
     private void save() {
-        WidgetPrefs.save(this, widgetId, color, radiusDp);
+        WidgetPrefs.save(this, widgetId, cfg);
         AppWidgetManager mgr = AppWidgetManager.getInstance(this);
         ClockWidgetProvider.update(this, mgr, widgetId);
         setResult(RESULT_OK, new Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId));
         finish();
     }
 
-    private TextView title(String t) {
-        TextView v = new TextView(this);
-        v.setText(t);
-        v.setTextSize(22);
-        v.setPadding(0, 0, 0, dp(12));
-        return v;
+    private TextView text(String t, int sp, int l, int b) {
+        return text(t, sp, l, b, 0);
     }
 
-    private TextView section(String t) {
+    private TextView text(String t, int sp, int l, int b, int top) {
         TextView v = new TextView(this);
         v.setText(t);
-        v.setTextSize(17);
-        v.setPadding(0, dp(20), 0, dp(8));
-        return v;
-    }
-
-    private TextView label(String t) {
-        TextView v = new TextView(this);
-        v.setText(t);
-        v.setTextSize(13);
-        v.setPadding(0, dp(8), 0, 0);
+        v.setTextSize(sp);
+        v.setPadding(dp(l), dp(top), 0, dp(b));
         return v;
     }
 }
