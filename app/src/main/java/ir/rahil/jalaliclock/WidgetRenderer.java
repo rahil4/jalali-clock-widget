@@ -60,18 +60,27 @@ public final class WidgetRenderer {
         return rv;
     }
 
+    /** سقف تعداد پیکسل بیت‌مپ؛ بیت‌مپ‌های بزرگ از حد ۱ مگابایتی Binder می‌گذرند و ویجت اصلاً نمایش داده نمی‌شود. */
+    private static final int MAX_PIXELS = 120_000;
+
     private static Bitmap frameBitmap(float wDp, float hDp, int radiusDp, int color, float density) {
-        int w = Math.round(wDp * density);
-        int h = Math.round(hDp * density);
+        float fullW = wDp * density;
+        float fullH = hDp * density;
+        // اگر قاب بزرگ بود، با وضوح کمتر رسم می‌شود و با density پایین‌تر در همان اندازهٔ dp نمایش داده می‌شود
+        float scale = Math.min(1f, (float) Math.sqrt(MAX_PIXELS / (fullW * fullH)));
+        float d = density * scale;
+        int w = Math.max(1, Math.round(wDp * d));
+        int h = Math.max(1, Math.round(hDp * d));
         Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+        bmp.setDensity(Math.max(1, Math.round(160 * d)));
         Canvas canvas = new Canvas(bmp);
         Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
         p.setStyle(Paint.Style.STROKE);
-        p.setStrokeWidth(STROKE_DP * density);
+        p.setStrokeWidth(STROKE_DP * d);
         p.setColor(color);
         float half = p.getStrokeWidth() / 2f;
         RectF rect = new RectF(half, half, w - half, h - half);
-        float r = Math.min(radiusDp * density, Math.min(rect.width(), rect.height()) / 2f);
+        float r = Math.min(radiusDp * d, Math.min(rect.width(), rect.height()) / 2f);
         canvas.drawRoundRect(rect, r, r, p);
         return bmp;
     }
