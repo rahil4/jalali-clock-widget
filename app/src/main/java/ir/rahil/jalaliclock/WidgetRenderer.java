@@ -44,7 +44,7 @@ public final class WidgetRenderer {
         }
         rv.setImageViewBitmap(R.id.frame, frameBitmap(frameW, frameH, cfg, ctx.getResources().getDisplayMetrics().density));
 
-        float digits = frameH * 0.30f;
+        float digits = frameH * 0.28f;
         rv.setTextViewTextSize(R.id.hour, TypedValue.COMPLEX_UNIT_DIP, digits);
         rv.setTextViewTextSize(R.id.minute, TypedValue.COMPLEX_UNIT_DIP, digits);
         rv.setTextColor(R.id.hour, color);
